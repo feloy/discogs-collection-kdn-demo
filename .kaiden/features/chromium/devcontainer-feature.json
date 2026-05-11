@@ -1,0 +1,13 @@
+{
+  "id": "chromium",
+  "version": "1.0.0",
+  "name": "Chromium Browser",
+  "description": "Installs Chromium browser for Playwright and browser automation",
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "latest",
+      "description": "Version to install (latest uses dnf default)"
+    }
+  }
+}
