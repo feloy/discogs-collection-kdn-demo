@@ -1,24 +1,24 @@
-import { DISCOGS_USER_TOKEN, DISCOGS_USERNAME } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import type { DiscogsCollectionResponse } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	const perPage = 100;
 
-	if (!DISCOGS_USER_TOKEN || !DISCOGS_USERNAME) {
+	if (!env.DISCOGS_USER_TOKEN || !env.DISCOGS_USERNAME) {
 		return {
-			error: 'Missing Discogs API credentials. Please set DISCOGS_USER_TOKEN and DISCOGS_USERNAME in .env file'
+			error: 'Missing Discogs API credentials. Please set env.DISCOGS_USER_TOKEN and env.DISCOGS_USERNAME in .env file'
 		};
 	}
 
 	try {
 		// Fetch first page to get total count
 		const firstResponse = await fetch(
-			`https://api.discogs.com/users/${DISCOGS_USERNAME}/collection/folders/0/releases?page=1&per_page=${perPage}`,
+			`https://api.discogs.com/users/${env.DISCOGS_USERNAME}/collection/folders/0/releases?page=1&per_page=${perPage}`,
 			{
 				headers: {
 					'User-Agent': 'DiscogsCollectionApp/1.0',
-					'Authorization': `Discogs token=${DISCOGS_USER_TOKEN}`
+					'Authorization': `Discogs token=${env.DISCOGS_USER_TOKEN}`
 				}
 			}
 		);
@@ -40,11 +40,11 @@ export const load: PageServerLoad = async ({ fetch }) => {
 		for (let page = 2; page <= totalPages; page++) {
 			fetchPromises.push(
 				fetch(
-					`https://api.discogs.com/users/${DISCOGS_USERNAME}/collection/folders/0/releases?page=${page}&per_page=${perPage}`,
+					`https://api.discogs.com/users/${env.DISCOGS_USERNAME}/collection/folders/0/releases?page=${page}&per_page=${perPage}`,
 					{
 						headers: {
 							'User-Agent': 'DiscogsCollectionApp/1.0',
-							'Authorization': `Discogs token=${DISCOGS_USER_TOKEN}`
+							'Authorization': `Discogs token=${env.DISCOGS_USER_TOKEN}`
 						}
 					}
 				).then((res) => res.json())
