@@ -5,12 +5,52 @@
 	let { data }: { data: PageData } = $props();
 
 	let sortOrder = $state<'artist' | 'title' | 'year' | 'date-added'>('artist');
+	let showSevenInch = $state(true);
+	let showLP = $state(true);
+	let showCD = $state(true);
+	let currentPage = $state(1);
+	const itemsPerPage = 50;
 
-	let sortedCollection = $derived.by(() => {
+	function hasFormat(release: DiscogsRelease, formatName: string): boolean {
+		return release.basic_information.formats.some((format) =>
+			format.name.toLowerCase().includes(formatName.toLowerCase())
+		);
+	}
+
+	let filteredAndSorted = $derived.by(() => {
 		if (!data.collection) return [];
 
-		const collection = [...data.collection];
+		let collection = [...data.collection];
 
+		// Filter by format
+		collection = collection.filter((release) => {
+			const formats = release.basic_information.formats;
+			const formatStr = formats.map((f) => f.name).join(' ').toLowerCase();
+			const descriptions = formats
+				.flatMap((f) => f.descriptions || [])
+				.join(' ')
+				.toLowerCase();
+
+			// Check format types
+			const is7Inch = formatStr.includes('7"') || descriptions.includes('7"');
+			const isLP = formatStr.includes('vinyl') && !is7Inch;
+			const isCD = formatStr.includes('cd');
+
+			// If none of the format matches any filter, include it if all filters are on
+			// (this handles other formats like Cassette, etc.)
+			if (!is7Inch && !isLP && !isCD) {
+				return showSevenInch && showLP && showCD;
+			}
+
+			// Check if the release matches any selected format
+			if (is7Inch && showSevenInch) return true;
+			if (isLP && showLP) return true;
+			if (isCD && showCD) return true;
+
+			return false;
+		});
+
+		// Sort the filtered collection
 		switch (sortOrder) {
 			case 'artist':
 				return collection.sort((a, b) => {
@@ -26,16 +66,40 @@
 				return collection.sort((a, b) => {
 					const yearA = a.basic_information.year || 0;
 					const yearB = b.basic_information.year || 0;
-					return yearB - yearA; // Descending (newest first)
+					return yearB - yearA;
 				});
 			case 'date-added':
 				return collection.sort((a, b) => {
-					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime(); // Descending (newest first)
+					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime();
 				});
 			default:
 				return collection;
 		}
 	});
+
+	let totalPages = $derived(Math.ceil(filteredAndSorted.length / itemsPerPage));
+
+	let paginatedCollection = $derived.by(() => {
+		const startIndex = (currentPage - 1) * itemsPerPage;
+		const endIndex = startIndex + itemsPerPage;
+		return filteredAndSorted.slice(startIndex, endIndex);
+	});
+
+	// Reset to page 1 when filters or sort order change
+	$effect(() => {
+		showSevenInch;
+		showLP;
+		showCD;
+		sortOrder;
+		currentPage = 1;
+	});
+
+	function goToPage(page: number) {
+		if (page >= 1 && page <= totalPages) {
+			currentPage = page;
+			window.scrollTo({ top: 0, behavior: 'smooth' });
+		}
+	}
 </script>
 
 <div class="container">
@@ -58,25 +122,43 @@
 	{:else if data.collection}
 		<div class="controls">
 			<div class="stats">
-				<p>Total items: {data.pagination.items}</p>
+				<p>Total items: {filteredAndSorted.length}</p>
 				<p>
-					Page {data.pagination.page} of {data.pagination.pages}
+					Page {currentPage} of {totalPages}
 				</p>
 			</div>
 
-			<div class="sort-control">
-				<label for="sort-order">Sort by:</label>
-				<select id="sort-order" bind:value={sortOrder}>
-					<option value="artist">Artist</option>
-					<option value="title">Title</option>
-					<option value="year">Year (newest first)</option>
-					<option value="date-added">Date Added (newest first)</option>
-				</select>
+			<div class="filter-sort-controls">
+				<div class="filter-control">
+					<span class="control-label">Filter:</span>
+					<label class="checkbox-label">
+						<input type="checkbox" bind:checked={showSevenInch} />
+						<span>7"</span>
+					</label>
+					<label class="checkbox-label">
+						<input type="checkbox" bind:checked={showLP} />
+						<span>LP</span>
+					</label>
+					<label class="checkbox-label">
+						<input type="checkbox" bind:checked={showCD} />
+						<span>CD</span>
+					</label>
+				</div>
+
+				<div class="sort-control">
+					<label for="sort-order">Sort by:</label>
+					<select id="sort-order" bind:value={sortOrder}>
+						<option value="artist">Artist</option>
+						<option value="title">Title</option>
+						<option value="year">Year (newest first)</option>
+						<option value="date-added">Date Added (newest first)</option>
+					</select>
+				</div>
 			</div>
 		</div>
 
 		<div class="collection-grid">
-			{#each sortedCollection as release (release.instance_id)}
+			{#each paginatedCollection as release (release.instance_id)}
 				<article class="release-card">
 					<div class="release-image">
 						<img
@@ -120,18 +202,22 @@
 			{/each}
 		</div>
 
-		{#if data.pagination.pages > 1}
+		{#if totalPages > 1}
 			<nav class="pagination">
-				{#if data.pagination.page > 1}
-					<a href="?page={data.pagination.page - 1}" class="pagination-link">← Previous</a>
+				{#if currentPage > 1}
+					<button onclick={() => goToPage(currentPage - 1)} class="pagination-link"
+						>← Previous</button
+					>
 				{/if}
 
 				<span class="pagination-info">
-					Page {data.pagination.page} of {data.pagination.pages}
+					Page {currentPage} of {totalPages}
 				</span>
 
-				{#if data.pagination.page < data.pagination.pages}
-					<a href="?page={data.pagination.page + 1}" class="pagination-link">Next →</a>
+				{#if currentPage < totalPages}
+					<button onclick={() => goToPage(currentPage + 1)} class="pagination-link"
+						>Next →</button
+					>
 				{/if}
 			</nav>
 		{/if}
@@ -194,6 +280,44 @@
 		display: flex;
 		gap: 2rem;
 		font-size: 1.1rem;
+	}
+
+	.filter-sort-controls {
+		display: flex;
+		gap: 2rem;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.filter-control {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.control-label {
+		font-weight: 500;
+		color: #333;
+	}
+
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.checkbox-label input[type='checkbox'] {
+		width: 18px;
+		height: 18px;
+		cursor: pointer;
+		accent-color: #0066cc;
+	}
+
+	.checkbox-label span {
+		font-size: 0.95rem;
+		color: #555;
 	}
 
 	.sort-control {
