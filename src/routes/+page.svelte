@@ -1,7 +1,41 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import type { DiscogsRelease } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
+
+	let sortOrder = $state<'artist' | 'title' | 'year' | 'date-added'>('artist');
+
+	let sortedCollection = $derived.by(() => {
+		if (!data.collection) return [];
+
+		const collection = [...data.collection];
+
+		switch (sortOrder) {
+			case 'artist':
+				return collection.sort((a, b) => {
+					const artistA = a.basic_information.artists[0]?.name || '';
+					const artistB = b.basic_information.artists[0]?.name || '';
+					return artistA.localeCompare(artistB);
+				});
+			case 'title':
+				return collection.sort((a, b) =>
+					a.basic_information.title.localeCompare(b.basic_information.title)
+				);
+			case 'year':
+				return collection.sort((a, b) => {
+					const yearA = a.basic_information.year || 0;
+					const yearB = b.basic_information.year || 0;
+					return yearB - yearA; // Descending (newest first)
+				});
+			case 'date-added':
+				return collection.sort((a, b) => {
+					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime(); // Descending (newest first)
+				});
+			default:
+				return collection;
+		}
+	});
 </script>
 
 <div class="container">
@@ -22,15 +56,27 @@
 			</ul>
 		</div>
 	{:else if data.collection}
-		<div class="stats">
-			<p>Total items: {data.pagination.items}</p>
-			<p>
-				Page {data.pagination.page} of {data.pagination.pages}
-			</p>
+		<div class="controls">
+			<div class="stats">
+				<p>Total items: {data.pagination.items}</p>
+				<p>
+					Page {data.pagination.page} of {data.pagination.pages}
+				</p>
+			</div>
+
+			<div class="sort-control">
+				<label for="sort-order">Sort by:</label>
+				<select id="sort-order" bind:value={sortOrder}>
+					<option value="artist">Artist</option>
+					<option value="title">Title</option>
+					<option value="year">Year (newest first)</option>
+					<option value="date-added">Date Added (newest first)</option>
+				</select>
+			</div>
 		</div>
 
 		<div class="collection-grid">
-			{#each data.collection as release (release.instance_id)}
+			{#each sortedCollection as release (release.instance_id)}
 				<article class="release-card">
 					<div class="release-image">
 						<img
@@ -135,12 +181,50 @@
 		font-family: monospace;
 	}
 
+	.controls {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 2rem;
+		gap: 2rem;
+		flex-wrap: wrap;
+	}
+
 	.stats {
 		display: flex;
 		gap: 2rem;
-		justify-content: center;
-		margin-bottom: 2rem;
 		font-size: 1.1rem;
+	}
+
+	.sort-control {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.sort-control label {
+		font-weight: 500;
+		color: #333;
+	}
+
+	.sort-control select {
+		padding: 0.5rem 2rem 0.5rem 0.75rem;
+		border: 1px solid #ccc;
+		border-radius: 6px;
+		font-size: 1rem;
+		background: white;
+		cursor: pointer;
+		transition: border-color 0.2s;
+	}
+
+	.sort-control select:hover {
+		border-color: #0066cc;
+	}
+
+	.sort-control select:focus {
+		outline: none;
+		border-color: #0066cc;
+		box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 	}
 
 	.collection-grid {
